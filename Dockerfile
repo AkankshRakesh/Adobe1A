@@ -1,21 +1,15 @@
-# Stage 1: Build
-FROM rust:1.75-slim-bookworm AS builder
+# Build stage
+FROM rust:1.75 AS builder
 
-WORKDIR /usr/src/app
-RUN cargo new adobe_pdf_extractor
-WORKDIR /usr/src/app/adobe_pdf_extractor
-
-# Cache dependencies
+WORKDIR /app
 COPY Cargo.toml .
+RUN mkdir src && echo 'fn main() {}' > src/main.rs
+RUN cargo build --release
+COPY src ./src
 RUN cargo build --release
 
-# Copy source and rebuild
-COPY src ./src
-RUN sed -i 's/^version = .*/version = "0.1.0"/' Cargo.toml && \
-    cargo build --release
-
-# Stage 2: Runtime
+# Runtime stage
 FROM debian:bookworm-slim
-COPY --from=builder /usr/src/app/adobe_pdf_extractor/target/release/adobe_pdf_extractor /usr/local/bin/
+COPY --from=builder /app/target/release/adobe1a /usr/local/bin/
 WORKDIR /app
-ENTRYPOINT ["adobe_pdf_extractor", "--input", "/app/input/sample.pdf", "--output", "/app/output/sample.json"]
+CMD ["adobe1a"]
