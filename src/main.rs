@@ -9,7 +9,6 @@ use once_cell::sync::Lazy;
 
 mod functions;
 
-// Pre-compile regex patterns for better performance
 pub static TITLE_PATTERN: Lazy<Regex> = Lazy::new(|| 
     Regex::new(r"(?i)^\s*(RFP|Request\s+for\s+Proposal|Proposal|Scope\s+of\s+Work)\s*:?\s*(.*)$").unwrap());
 pub static NUMBERED_HEADING: Lazy<Regex> = Lazy::new(|| 
@@ -53,14 +52,12 @@ fn main() -> Result<()> {
 }
 
 fn extract_outline(pdf_path: &PathBuf) -> Result<Outline> {
-    // First try using pdf-extract which handles more PDF formats
     if let Ok(outline) = try_pdf_extract(pdf_path) {
         if !outline.outline.is_empty() {
             return Ok(outline);
         }
     }
 
-    // Fall back to lopdf if pdf-extract fails
     extract_with_lopdf(pdf_path)
 }
 
@@ -75,11 +72,9 @@ fn try_pdf_extract(pdf_path: &PathBuf) -> Result<Outline> {
     let mut title = String::new();
     let mut headings = Vec::new();
 
-    // Split text into pages (approximate)
     let pages: Vec<&str> = if text.contains('\x0C') {
         text.split('\x0C').collect()
     } else {
-        // Fallback splitting by large whitespace sections
         text.split("\n\n\n").collect()
     };
 
@@ -90,12 +85,10 @@ fn try_pdf_extract(pdf_path: &PathBuf) -> Result<Outline> {
             .filter(|l| !l.is_empty())
             .collect();
 
-        // Extract title from first page
         if title.is_empty() && current_page == 1 {
             title = functions::extract_document_title(&lines, page_text);
         }
 
-        // Process potential headings
         for (i, line) in lines.iter().enumerate() {
             if let Some(heading) = functions::analyze_potential_heading(
                 line,
