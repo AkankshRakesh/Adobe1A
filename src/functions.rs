@@ -343,32 +343,36 @@ pub fn is_excluded_text(line: &str) -> bool {
 }
 
 pub fn determine_numbered_level(line: &str) -> String {
-    let numbering_part = line.split_whitespace().next().unwrap_or("");
-    
-    // Count dots in the numbering part
-    let dot_count = numbering_part.chars().filter(|&c| c == '.').count();
-    
-    match dot_count {
-        0 => {
-            // Single number like "9" -> H1
-            if numbering_part.chars().all(|c| c.is_numeric()) {
-                "H1".to_string()
-            } else {
-                "H1".to_string()  // Roman numerals or letters
-            }
-        },
-        1 => {
-            // Check if it's a decimal like "9.1" or just "9."
-            if numbering_part.ends_with('.') {
-                "H1".to_string()  // "9."
-            } else {
-                "H2".to_string()  // "9.1"
-            }
-        },
-        2 => "H3".to_string(),  // "9.1.1"
-        3 => "H4".to_string(),  // "9.1.1.1"
-        _ => "H4".to_string(),  // Deeper nesting
+    let raw_prefix = line.trim_start();
+    let re = Regex::new(r"^(?P<prefix>(?:\d+\.)+\d+|\d+|[A-Za-z]{1,2}|[IVXLCDM]+)[\.)]?").unwrap();
+    let captures = re.captures(raw_prefix);
+
+    let prefix = captures.and_then(|c| c.name("prefix")).map(|m| m.as_str()).unwrap_or("");
+
+    // Numeric decimal hierarchy e.g. 1.2.3 => level = components - 1 (root is H1)
+    if prefix.chars().next().map_or(false, |c| c.is_numeric()) {
+        let components = prefix.split('.').count();
+        return match components {
+            1 => "H1".to_string(),
+            2 => "H2".to_string(),
+            3 => "H3".to_string(),
+            _ => "H4".to_string(),
+        };
     }
+
+    // Alphabetic (A, B, C ...) treat as H2 beneath previous H1
+    if prefix.chars().next().map_or(false, |c| c.is_alphabetic()) && prefix.len() <= 2 {
+        return "H2".to_string();
+    }
+
+    // Roman numerals -> assume H2 as well
+    let roman_re = Regex::new(r"^[IVXLCDM]+$").unwrap();
+    if roman_re.is_match(prefix) {
+        return "H2".to_string();
+    }
+
+    // Default fallback
+    "H2".to_string()
 }
 
 pub fn clean_heading_text(text: &str) -> String {

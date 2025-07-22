@@ -8,11 +8,15 @@ use regex::Regex;
 use once_cell::sync::Lazy;
 
 mod functions;
+mod font_utils;
 
 pub static TITLE_PATTERN: Lazy<Regex> = Lazy::new(|| 
     Regex::new(r"(?i)^\s*(RFP|Request\s+for\s+Proposal|Proposal|Scope\s+of\s+Work)\s*:?\s*(.*)$").unwrap());
-pub static NUMBERED_HEADING: Lazy<Regex> = Lazy::new(|| 
-    Regex::new(r"^\s*((\d+\.)+\s*[A-Z].*|^[IVX]+\.?\s+[A-Z].*)").unwrap());
+pub static NUMBERED_HEADING: Lazy<Regex> = Lazy::new(||
+    // Matches headings that begin with multi-level decimals like "1.", "1.2.", etc.,
+    // single decimals with text ("1 Introduction"), roman numerals ("IV. Scope"),
+    // or alpha enumerations such as "A. Background" or "b) Goals".
+    Regex::new(r"^\s*(?:((?:\d+\.)+\d*|\d+)[\.)]?\s+.+|[A-Za-z]{1,2}[\.)]\s+.+|[IVXLCDM]+[\.)]?\s+.+)").unwrap());
 pub static SECTION_HEADING: Lazy<Regex> = Lazy::new(|| 
     Regex::new(r"^\s*(Chapter|Section|Part)\s+([A-Z0-9]+)").unwrap());
 pub static APPENDIX_HEADING: Lazy<Regex> = Lazy::new(|| 
@@ -122,6 +126,22 @@ fn extract_with_lopdf(pdf_path: &PathBuf) -> Result<Outline> {
     let mut headings = Vec::new();
     let mut first_page_text = String::new();
 
+    // First, compute heading size threshold once.
+    let runs = font_utils::extract_runs(&doc);
+    use std::collections::HashSet;
+    let mut sizes: Vec<f64> = runs.iter().map(|r| r.size).collect();
+    sizes.sort_by(|a, b| b.partial_cmp(a).unwrap());
+    sizes.dedup();
+    let heading_threshold = sizes.get(1).copied().unwrap_or(14.0);
+    // Build quick lookup of large-font lines by (page,text)
+    let mut large_font_set: HashSet<(usize, String)> = HashSet::new();
+    for r in &runs {
+        if r.size >= heading_threshold {
+            large_font_set.insert((r.page, r.text.trim().to_string()));
+        }
+    }
+
+    // Iterate by page, but we'll also check runs to find candidate lines.
     for (page_index, (page_id, _)) in doc.page_iter().enumerate() {
         let current_page = page_index + 1;
         
@@ -141,6 +161,9 @@ fn extract_with_lopdf(pdf_path: &PathBuf) -> Result<Outline> {
                 }
 
                 for (i, line) in lines.iter().enumerate() {
+                    if !large_font_set.contains(&(current_page, line.to_string())) {
+                        continue;
+                    }
                     if let Some(heading) = functions::analyze_potential_heading(
                         line,
                         i,
