@@ -1,0 +1,19 @@
+FROM rust:1.80 AS builder
+
+WORKDIR /app
+COPY test_main.rs ./
+RUN rustc test_main.rs -o test_binary
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    libc6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/test_binary /usr/local/bin/
+WORKDIR /app
+RUN mkdir -p input output
+
+CMD ["test_binary"]

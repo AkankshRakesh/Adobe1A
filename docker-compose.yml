@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pdf-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount your local input folder to the container's input folder
+      - ./input:/app/input:ro
+      # Mount your local output folder to the container's output folder
+      - ./output:/app/output
+    environment:
+      - RUST_LOG=info
+    working_dir: /app
+    command: ["/usr/local/bin/process_all_pdfs.sh"]
+    
+    # Optional: Add resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M

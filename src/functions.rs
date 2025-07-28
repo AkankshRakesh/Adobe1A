@@ -117,6 +117,7 @@ pub fn analyze_potential_heading(
             level: determine_numbered_level(line),
             text: clean_heading_text(line),
             page,
+            confidence: 0.9, // High confidence for numbered headings
         });
     }
 
@@ -125,6 +126,7 @@ pub fn analyze_potential_heading(
             level: "H1".to_string(),
             text: clean_heading_text(line),
             page,
+            confidence: 0.85, // High confidence for section headings
         });
     }
 
@@ -133,6 +135,7 @@ pub fn analyze_potential_heading(
             level: "H1".to_string(),
             text: clean_heading_text(line),
             page,
+            confidence: 0.85, // High confidence for appendix headings
         });
     }
 
@@ -145,6 +148,7 @@ pub fn analyze_potential_heading(
                     level: "H1".to_string(),
                     text: clean_heading_text(line),
                     page,
+                    confidence: 0.8, // Good confidence for uppercase isolated headings
                 });
             }
         }
@@ -160,6 +164,7 @@ pub fn analyze_potential_heading(
                     level: "H2".to_string(),
                     text: clean_heading_text(line),
                     page,
+                    confidence: 0.75, // Good confidence for colon headings
                 });
             }
         }
@@ -181,6 +186,7 @@ pub fn analyze_potential_heading(
                     level: determine_heading_level_by_content(line),
                     text: clean_heading_text(line),
                     page,
+                    confidence: 0.65, // Moderate confidence for capitalized headings
                 });
             }
         }

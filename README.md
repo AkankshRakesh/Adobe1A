@@ -35,9 +35,9 @@ This approach balances precision and recall while adhering to the strict perform
 
 You can run the solution using either Docker (recommended for submission) or a local Rust toolchain.
 
-### Docker (for Submission)
+### Docker (for Submission) - Batch Processing
 
-This method uses the provided `Dockerfile` and is the expected way to run the solution for evaluation.
+This method uses the provided `Dockerfile` and automatically processes all PDFs in the input folder, generating numbered JSON files (1.json, 2.json, etc.).
 
 1.  **Build the Docker Image**:
 
@@ -45,15 +45,31 @@ This method uses the provided `Dockerfile` and is the expected way to run the so
     docker build --platform linux/amd64 -t outline-extractor:latest .
     ```
 
-2.  **Run the Container**:
+2.  **Run the Container for Batch Processing**:
 
-    Place your input PDFs in a directory (e.g., `input/`). The container will automatically process them and place the JSON results in an `output/` directory.
+    Place your input PDFs in a directory (e.g., `input/`). The container will automatically process them and place the JSON results in an `output/` directory with numbered filenames.
 
     ```sh
     docker run --rm -v $(pwd)/input:/app/input -v $(pwd)/output:/app/output --network none outline-extractor:latest
     ```
 
-### Local Development (with Cargo)
+    **Output**: Files will be named with the same name as input PDFs but with `.json` extension (e.g., `document.pdf` → `document.json`).
+
+3.  **Alternative: Using Docker Compose**:
+
+    ```sh
+    docker-compose up --build
+    ```
+
+### Docker (Single File Processing)
+
+For processing a single PDF file:
+
+```sh
+docker run --rm -v $(pwd)/input:/app/input -v $(pwd)/output:/app/output --network none outline-extractor:latest adobe1a -i /app/input/yourfile.pdf -o /app/output/yourfile.json
+```
+
+### Local Development (with Cargo) - Batch Processing
 
 This is useful for testing and development if you have the Rust toolchain installed.
 
@@ -63,10 +79,32 @@ This is useful for testing and development if you have the Rust toolchain instal
     cargo build --release
     ```
 
-2.  **Run the Executable**:
+2.  **Batch Process All PDFs** (PowerShell on Windows):
+
+    ```powershell
+    .\process_all_pdfs.ps1
+    ```
+
+    Or (Bash on Linux/Mac):
+
+    ```bash
+    chmod +x process_all_pdfs.sh
+    ./process_all_pdfs.sh
+    ```
+
+3.  **Process a Single PDF**:
 
     Provide the path to a single input PDF and the desired output JSON file.
 
     ```sh
     ./target/release/adobe1a --input ./pdfs/sample.pdf --output ./output/sample.json
     ```
+
+## Key Features
+
+*   **Font-based heading detection** with confidence scoring
+*   **Optimized filtering** to eliminate false positives from prose text
+*   **Batch processing** of multiple PDFs with numbered output files
+*   **Cross-platform support** (Docker + native scripts for Windows/Linux/Mac)
+*   **Hierarchical heading levels** (H1, H2, H3) based on font size and style
+*   **Title extraction** with intelligent scoring system

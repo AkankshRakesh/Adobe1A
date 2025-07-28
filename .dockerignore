@@ -1,0 +1,11 @@
+target/
+output/
+Cargo.lock
+*.json
+*.pdf
+.git/
+.gitignore
+README.md
+README_DOCKER.md
+*.ps1
+docker-compose.yml

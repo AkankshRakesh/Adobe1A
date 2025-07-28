@@ -24,11 +24,12 @@ pub static APPENDIX_HEADING: Lazy<Regex> = Lazy::new(||
 pub static COLON_HEADING: Lazy<Regex> = Lazy::new(|| 
     Regex::new(r"^[A-Z][A-Za-z\s]+:$").unwrap());
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Heading {
     pub level: String,
     pub text: String,
     pub page: usize,
+    pub confidence: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -123,60 +124,47 @@ fn try_pdf_extract(pdf_path: &PathBuf) -> Result<Outline> {
 fn extract_with_lopdf(pdf_path: &PathBuf) -> Result<Outline> {
     let doc = Document::load(pdf_path)?;
     let mut title = String::new();
-    let mut headings = Vec::new();
-    let mut first_page_text = String::new();
+    
+    // Use the new font-based approach
+    let heading_candidates = font_utils::extract_heading_candidates(&doc);
+    
+    // Convert font-based candidates to our Heading format and filter
+    let mut headings: Vec<Heading> = heading_candidates.into_iter()
+        .filter(|candidate| {
+            candidate.text.len() > 3 && 
+            candidate.confidence > 0.6 && // Higher confidence threshold
+            !functions::is_excluded_text(&candidate.text)
+        })
+        .map(|candidate| Heading {
+            level: candidate.level,
+            text: functions::clean_heading_text(&candidate.text),
+            page: candidate.page,
+            confidence: candidate.confidence,
+        })
+        .collect();
 
-    // First, compute heading size threshold once.
-    let runs = font_utils::extract_runs(&doc);
-    use std::collections::HashSet;
-    let mut sizes: Vec<f64> = runs.iter().map(|r| r.size).collect();
-    sizes.sort_by(|a, b| b.partial_cmp(a).unwrap());
-    sizes.dedup();
-    let heading_threshold = sizes.get(1).copied().unwrap_or(14.0);
-    // Build quick lookup of large-font lines by (page,text)
-    let mut large_font_set: HashSet<(usize, String)> = HashSet::new();
-    for r in &runs {
-        if r.size >= heading_threshold {
-            large_font_set.insert((r.page, r.text.trim().to_string()));
-        }
-    }
+    // Sort by confidence and take top candidates to avoid noise
+    headings.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    
+    // Take only top 50 headings to avoid overwhelming output
+    headings.truncate(50);
+    
+    // Sort back by page order
+    headings.sort_by(|a, b| a.page.cmp(&b.page));
 
-    // Iterate by page, but we'll also check runs to find candidate lines.
-    for (page_index, (page_id, _)) in doc.page_iter().enumerate() {
-        let current_page = page_index + 1;
-        
-        match doc.extract_text(&[page_id]) {
-            Ok(text) => {
-                if current_page == 1 {
-                    first_page_text = text.clone();
+    // Extract title from first page if we haven't found one
+    if title.is_empty() {
+        for (page_index, (page_id, _)) in doc.page_iter().enumerate() {
+            if page_index == 0 { // First page only
+                if let Ok(text) = doc.extract_text(&[page_id]) {
+                    let lines: Vec<&str> = text.lines()
+                        .map(|l| l.trim())
+                        .filter(|l| !l.is_empty())
+                        .collect();
+                    title = functions::extract_document_title(&lines, &text);
+                    break;
                 }
-
-                let lines: Vec<&str> = text.lines()
-                    .map(|l| l.trim())
-                    .filter(|l| !l.is_empty())
-                    .collect();
-
-                if title.is_empty() {
-                    title = functions::extract_document_title(&lines, &first_page_text);
-                }
-
-                for (i, line) in lines.iter().enumerate() {
-                    if !large_font_set.contains(&(current_page, line.to_string())) {
-                        continue;
-                    }
-                    if let Some(heading) = functions::analyze_potential_heading(
-                        line,
-                        i,
-                        &lines,
-                        current_page,
-                    ) {
-                        if !headings.iter().any(|h: &Heading| h.text == heading.text && h.page == heading.page) {
-                            headings.push(heading);
-                        }
-                    }
-                }
-            },
-            Err(e) => eprintln!("Warning: Could not extract text from page {}: {}", current_page, e),
+            }
         }
     }
 
